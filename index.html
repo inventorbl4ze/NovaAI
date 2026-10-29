@@ -1,1 +1,358 @@
 
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#10091f">
+<title>Nova AI 💜</title>
+
+<style>
+*{box-sizing:border-box}
+:root{
+  --bg:#10091f;
+  --panel:#1c1033;
+  --purple:#9b5cff;
+  --text:#f7f1ff;
+  --muted:#b8a9d2;
+}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font-family:Arial,Helvetica,sans-serif;
+  height:100dvh;display:flex;flex-direction:column;
+}
+header{
+  padding:15px 17px;background:var(--panel);
+  display:flex;align-items:center;gap:12px;
+  border-bottom:1px solid #392352;
+}
+.avatar{
+  width:46px;height:46px;border-radius:50%;
+  display:grid;place-items:center;
+  background:linear-gradient(135deg,#c08aff,#6528d9);
+  font-size:25px;
+}
+h2{margin:0 0 5px;font-size:20px}
+header p{margin:0;color:#cdb8ee;font-size:12px}
+.online{color:#77f5b0}
+#newChat{
+  margin-left:auto;background:#35204e;color:white;
+  padding:10px;border-radius:10px;
+}
+#chat{
+  flex:1;overflow-y:auto;padding:16px;
+  display:flex;flex-direction:column;gap:13px;
+  scroll-behavior:smooth;
+}
+.welcome{
+  margin:auto 0;text-align:center;padding:22px 8px;
+}
+.logo{
+  font-size:55px;margin-bottom:12px;
+  filter:drop-shadow(0 0 18px #9b5cff);
+}
+.welcome h1{font-size:29px;margin:0 0 10px}
+.welcome p{color:var(--muted);line-height:1.6}
+.suggestions{
+  display:grid;grid-template-columns:1fr 1fr;
+  gap:9px;margin-top:22px;
+}
+.suggestions button{
+  background:#211434;border:1px solid #493064;
+  color:#eadcff;border-radius:14px;padding:13px;
+  text-align:left;line-height:1.4;
+}
+.message{
+  max-width:88%;padding:13px 15px;
+  border-radius:17px;line-height:1.55;
+  overflow-wrap:anywhere;white-space:pre-wrap;
+}
+.bot{
+  align-self:flex-start;background:#28173d;
+  border:1px solid #49305f;border-bottom-left-radius:5px;
+}
+.user{
+  align-self:flex-end;background:#7139c8;
+  border-bottom-right-radius:5px;
+}
+.time{font-size:10px;opacity:.7;margin-top:6px}
+#status{font-size:12px;color:#bda2eb;padding:0 17px 8px}
+footer{
+  padding:12px;background:var(--panel);
+  border-top:1px solid #392352;
+  padding-bottom:max(12px,env(safe-area-inset-bottom));
+}
+#composer{
+  display:flex;align-items:flex-end;gap:8px;
+  max-width:850px;margin:auto;
+}
+textarea{
+  flex:1;min-width:0;resize:none;
+  max-height:120px;min-height:46px;
+  padding:14px;border-radius:15px;
+  border:1px solid #49305f;
+  background:#10091f;color:white;
+  font:inherit;outline:none;
+}
+textarea:focus{border-color:var(--purple)}
+button{cursor:pointer;font:inherit}
+.action{
+  border:0;border-radius:13px;
+  background:#35204e;color:white;
+  min-width:45px;height:46px;padding:8px;
+}
+#send{background:var(--purple);font-weight:bold}
+#send:disabled{opacity:.5}
+.note{
+  text-align:center;color:#a99abf;
+  font-size:10px;margin:9px 0 0;
+}
+</style>
+</head>
+
+<body>
+<header>
+  <div class="avatar">✦</div>
+  <div>
+    <h2>Nova AI <span style="color:#c08aff">💜</span></h2>
+    <p><span class="online">●</span> Your personal AI assistant</p>
+  </div>
+  <button id="newChat" title="New conversation">＋</button>
+</header>
+
+<main id="chat">
+  <section class="welcome" id="welcome">
+    <div class="logo">✦</div>
+    <h1>Hey, I'm Nova.</h1>
+    <p>Your ideas, questions and imagination<br>
+    start here. What shall we explore today?</p>
+    <div class="suggestions">
+      <button data-prompt="Teach me something interesting about space">
+        🚀 Explore space
+      </button>
+      <button data-prompt="Help me learn programming as a beginner">
+        💻 Learn coding
+      </button>
+      <button data-prompt="Give me an idea for a cool invention">
+        🤖 Invent something
+      </button>
+      <button data-prompt="Explain artificial intelligence simply">
+        🧠 Discover AI
+      </button>
+    </div>
+  </section>
+</main>
+
+<div id="status" aria-live="polite"></div>
+
+<footer>
+  <div id="composer">
+    <button class="action" id="mic" title="Speak your message">🎙️</button>
+    <textarea id="input" rows="1"
+      placeholder="Message Nova..."
+      aria-label="Your message"></textarea>
+    <button class="action" id="speak" title="Toggle spoken replies">🔊</button>
+    <button class="action" id="send" title="Send message">➤</button>
+  </div>
+  <p class="note">Nova AI can make mistakes. Check important information.</p>
+</footer>
+
+<script>
+const chat = document.getElementById("chat");
+const welcome = document.getElementById("welcome");
+const input = document.getElementById("input");
+const send = document.getElementById("send");
+const statusBox = document.getElementById("status");
+
+let speakingEnabled = false;
+let busy = false;
+let history = [];
+
+try {
+  history = JSON.parse(localStorage.getItem("novaHistory") || "[]");
+  if (!Array.isArray(history)) history = [];
+} catch {
+  history = [];
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem("novaHistory", JSON.stringify(history.slice(-100)));
+  } catch {}
+}
+
+function addMessage(role, text, save = true) {
+  welcome?.remove();
+
+  const bubble = document.createElement("div");
+  bubble.className = "message " + (role === "user" ? "user" : "bot");
+  bubble.textContent = text;
+
+  const time = document.createElement("div");
+  time.className = "time";
+  time.textContent = new Date().toLocaleTimeString([], {
+    hour: "2-digit", minute: "2-digit"
+  });
+
+  bubble.appendChild(time);
+  chat.appendChild(bubble);
+  chat.scrollTop = chat.scrollHeight;
+
+  if (save) {
+    history.push({role, text});
+    history = history.slice(-100);
+    saveHistory();
+  }
+}
+
+function showWelcome() {
+  chat.innerHTML = `
+    <section class="welcome" id="welcome">
+      <div class="logo">✦</div>
+      <h1>Hey, I'm Nova.</h1>
+      <p>Your ideas, questions and imagination<br>
+      start here. What shall we explore today?</p>
+      <div class="suggestions">
+        <button data-prompt="Teach me something interesting about space">🚀 Explore space</button>
+        <button data-prompt="Help me learn programming as a beginner">💻 Learn coding</button>
+        <button data-prompt="Give me an idea for a cool invention">🤖 Invent something</button>
+        <button data-prompt="Explain artificial intelligence simply">🧠 Discover AI</button>
+      </div>
+    </section>`;
+}
+
+function renderHistory() {
+  if (history.length) {
+    welcome?.remove();
+    history.forEach(m => addMessage(m.role, m.text, false));
+  }
+}
+
+function speak(text) {
+  if (!speakingEnabled || !("speechSynthesis" in window)) return;
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.rate = 1;
+  utterance.pitch = 1;
+  speechSynthesis.speak(utterance);
+}
+
+// This starter version is a demo. A secure AI backend
+// will be connected in the next development stage.
+async function getAIReply(message) {
+  return "I received your message: \"" + message + "\"\n\n" +
+    "My real AI brain has not been connected yet. " +
+    "The next step is to connect Nova to an AI service through " +
+    "a secure backend, so I can answer your questions intelligently.";
+}
+
+async function sendMessage(text) {
+  text = text.trim();
+  if (!text || busy) return;
+
+  busy = true;
+  send.disabled = true;
+  input.value = "";
+  input.style.height = "46px";
+
+  addMessage("user", text);
+  statusBox.textContent = "Nova is thinking...";
+
+  const typing = document.createElement("div");
+  typing.className = "message bot";
+  typing.textContent = "Thinking ✦";
+  chat.appendChild(typing);
+  chat.scrollTop = chat.scrollHeight;
+
+  try {
+    const reply = await getAIReply(text);
+    typing.remove();
+    addMessage("bot", reply);
+    speak(reply);
+    statusBox.textContent = "Demo mode — AI connection coming next";
+  } catch (error) {
+    typing.remove();
+    addMessage("bot", "Something went wrong. Please try again.");
+    statusBox.textContent = "An error occurred.";
+  } finally {
+    busy = false;
+    send.disabled = false;
+    input.focus();
+  }
+}
+
+send.addEventListener("click", () => sendMessage(input.value));
+
+input.addEventListener("input", () => {
+  input.style.height = "46px";
+  input.style.height = Math.min(input.scrollHeight, 120) + "px";
+});
+
+input.addEventListener("keydown", event => {
+  if (event.key === "Enter" && !event.shiftKey) {
+    event.preventDefault();
+    sendMessage(input.value);
+  }
+});
+
+chat.addEventListener("click", event => {
+  const button = event.target.closest("[data-prompt]");
+  if (button) sendMessage(button.dataset.prompt);
+});
+
+document.getElementById("newChat").addEventListener("click", () => {
+  if (!confirm("Start a new conversation? This clears saved chat history.")) return;
+  history = [];
+  saveHistory();
+  if ("speechSynthesis" in window) speechSynthesis.cancel();
+  statusBox.textContent = "";
+  showWelcome();
+});
+
+document.getElementById("speak").addEventListener("click", () => {
+  speakingEnabled = !speakingEnabled;
+  document.getElementById("speak").textContent =
+    speakingEnabled ? "🔊" : "🔇";
+  statusBox.textContent = speakingEnabled
+    ? "Spoken replies enabled where supported."
+    : "Spoken replies disabled.";
+  if (!speakingEnabled && "speechSynthesis" in window) {
+    speechSynthesis.cancel();
+  }
+});
+
+document.getElementById("mic").addEventListener("click", () => {
+  const SpeechRecognition =
+    window.SpeechRecognition || window.webkitSpeechRecognition;
+
+  if (!SpeechRecognition) {
+    statusBox.textContent =
+      "Voice input is not supported in this browser. Try a supported browser.";
+    return;
+  }
+
+  const recognition = new SpeechRecognition();
+  recognition.lang = "en-NG";
+  recognition.interimResults = false;
+  recognition.onstart = () => statusBox.textContent = "Listening...";
+  recognition.onresult = event => {
+    input.value = event.results[0][0].transcript;
+    input.dispatchEvent(new Event("input"));
+    statusBox.textContent = "Voice captured. Tap send.";
+  };
+  recognition.onerror = () => {
+    statusBox.textContent = "Could not capture speech. Check microphone permission.";
+  };
+  recognition.onend = () => {
+    if (statusBox.textContent === "Listening...") {
+      statusBox.textContent = "";
+    }
+  };
+  recognition.start();
+});
+
+renderHistory();
+</script>
+</body>
+</html>
+
